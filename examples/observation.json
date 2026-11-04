@@ -1,0 +1,47 @@
+{
+    "resourceType": "Observation",
+    "id": "glicose-intersticial-cgm-001",
+    "meta": {
+        "profile": [
+            "http://www.saude.gov.br/fhir/r4/StructureDefinition/BRMedidaObservada"
+        ]
+    },
+    "status": "final",
+    "code": {
+        "coding": [
+            {
+                "system": "http://loinc.org",
+                "code": "99504-3",
+                "display": "Glucose [Mass/volume] in Interstitial fluid"
+            }
+        ],
+        "text": "Glicose intersticial"
+    },
+    "valueQuantity": {
+        "value": 120,
+        "unit": "mg/dL",
+        "system": "https://www.hl7.org/fhir/valueset-ucum-common.html",
+        "code": "mg/dL"
+    },
+    "bodySite": {
+        "coding": [
+            {
+                "system": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRLocalAfericao",
+                "code": "1",
+                "display": "Braco direito"
+            }
+        ]
+    },
+    "method": {
+        "coding": [
+            {
+                "system": "http://www.saude.gov.br/fhir/r4/CodeSystem/BRPosicaoIndividuo",
+                "code": "2",
+                "display": "Sentado"
+            }
+        ]
+    },
+    "effectiveDateTime": "2020-09-08T05:38:00+08:00", 
+    "subject": {"reference": "Patient/2085"},
+    "device": {"reference": "Device/cgm-sim-01"}
+}

@@ -1,0 +1,29 @@
+{
+    "resourceType": "Observation", 
+    "id": "8fbd9b8e3152631e1bcd4aa02ccd4385d10ed20113774aafaa4210f982cef455", 
+    "status": "final", 
+    "category": [{
+        "coding": [{
+            "system": "http://terminology.hl7.org/CodeSystem/observation-category", 
+            "code": "laboratory", 
+            "display": "Laboratory"
+        }]
+    }], 
+    "code": {
+        "coding": [{
+            "system": "http://loinc.org", 
+            "code": "99504-3", 
+            "display": "Glucose [Mass/volume] in Interstitial fluid"
+        }],
+        "text": "Glicose intersticial"
+    }, 
+    "subject": {"reference": "urn:uuid:<patient>"}, 
+    "effectiveDateTime": "2020-09-08T05:38:00+08:00", 
+    "valueQuantity": {
+        "value": 66.6, 
+        "unit": "mg/dL", 
+        "system": "http://unitsofmeasure.org", 
+        "code": "mg/dL"
+    }, 
+    "device": {"reference": "urn:uuid:<device>"}
+}

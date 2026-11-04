@@ -1,0 +1,51 @@
+services:
+  ipfs-node:
+    build: .
+      #context: ./ipfs
+    container_name: ${NODE_NAME}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      IPFS_API_PORT: ${IPFS_API_PORT:-5001}
+      IPFS_GATEWAY_PORT: ${IPFS_GATEWAY_PORT:-8080}
+      IPFS_BOOTSTRAP_PEERS: ${IPFS_BOOTSTRAP_PEERS:-}
+      IPFS_SWARM_KEY_FILE: /swarm.key
+    
+    ports:
+      - "${NODE_IP:?Set NODE_IP to this host's OpenVPN address}:${IPFS_API_PORT:-5001}:${IPFS_API_PORT:-5001}"
+      - "${NODE_IP:?Set NODE_IP to this host's OpenVPN address}:${IPFS_GATEWAY_HOST_PORT:-8084}:${IPFS_GATEWAY_PORT:-8080}"
+    volumes:
+      - ./ipfs/swarm.key:/swarm.key:ro
+      - ipfs_data:/data/ipfs
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5001/api/v0/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  #netbird:
+  #  image: netbirdio/netbird:latest
+  #  container_name: netbird-kafka
+
+  #  hostname: net-distributed
+
+  #  cap_add:
+  #    - NET_ADMIN
+  #    - SYS_ADMIN
+  #    - NET_RAW
+
+  #  volumes:
+  #    - ./netbird/client:/etc/netbird
+
+  #  network_mode: host
+
+  #  restart: unless-stopped
+
+  #  command:
+  #    - up
+  #    - --management-url:https://api.netbird.io:443
+  #    - --setup-key:${NETBIRD_SETUP_KEY}
+
+volumes:
+  ipfs_data:

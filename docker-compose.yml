@@ -1,0 +1,163 @@
+services:
+  mosquitto:
+    profiles: ["cgm"]
+    image: eclipse-mosquitto:2.0.22
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-p", "1883", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "15"]
+      interval: 15s
+      timeout: 17s
+      retries: 3
+      start_period: 10s
+    networks:
+      - cgm-network
+
+  observation-processor:
+    profiles: ["cgm"]
+    build:
+      context: ./observation-processor
+    image: mqttbroker-observation-processor:local
+    environment:
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_TOPIC: ${MQTT_TOPIC:-cgm/measurements}
+      OUTPUT_PATH: /app/output/observations.jsonl
+      DATASET_TIMEZONE: ${DATASET_TIMEZONE:-Asia/Shanghai}
+    volumes:
+      - ./output:/app/output
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - cgm-network
+
+  observation-storage:
+    profiles: ["storage"]
+    build:
+      context: ./observation-processor
+    image: mqttbroker-observation-processor:local
+    command:
+      [
+        "uvicorn",
+        "storage_api:app",
+        "--app-dir",
+        "/app/src",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+      ]
+    environment:
+      IPFS_API_URL: ${IPFS_API_URL:-http://ipfs-node:5001}
+      ENCRYPTION_PUBLIC_KEY_PATH: /run/secrets/observations-public.pem
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-observations}
+      POSTGRES_USER: ${POSTGRES_USER:-observations}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${STORAGE_API_PORT:-8000}:8000"
+    volumes:
+      - ./secrets/encryption/public.pem:/run/secrets/observations-public.pem:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ipfs-node:
+        condition: service_started
+    networks:
+      - cgm-network
+      - ipfs-network
+
+  postgres:
+    profiles: ["storage"]
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-observations}
+      POSTGRES_USER: ${POSTGRES_USER:-observations}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - cgm-network
+
+  encryption-keygen:
+    image: mqttbroker-observation-processor:local
+    profiles: ["tools"]
+    entrypoint: ["python", "src/generate_encryption_keys.py", "/keys"]
+    volumes:
+      - ./secrets/encryption:/keys
+
+  cgm-simulator:
+    profiles: ["cgm"]
+    build:
+      context: ./cgm-simulator
+    environment:
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_TOPIC: ${MQTT_TOPIC:-cgm/measurements}
+      SIM_INTERVAL_SECONDS: ${SIM_INTERVAL_SECONDS:-1}
+      SIM_START_DELAY_SECONDS: ${SIM_START_DELAY_SECONDS:-2}
+      CGM_DEVICE_ID: ${CGM_DEVICE_ID:-cgm-sim-01}
+      DATASET_PATH: /app/data
+      DATASET_PATIENT_COLUMN: ${DATASET_PATIENT_COLUMN:-}
+      DATASET_PATIENT_FROM_FILENAME: ${DATASET_PATIENT_FROM_FILENAME:-true}
+      DATASET_TIME_COLUMN: ${DATASET_TIME_COLUMN:-Date}
+      DATASET_GLUCOSE_COLUMN: ${DATASET_GLUCOSE_COLUMN:-CGM (mg / dl)}
+      DATASET_GLUCOSE_UNIT: ${DATASET_GLUCOSE_UNIT:-mg/dL}
+      DATASET_TIME_FORMAT: ${DATASET_TIME_FORMAT:-%Y-%m-%d %H:%M:%S}
+      DATASET_TIMEZONE: ${DATASET_TIMEZONE:-Asia/Shanghai}
+      PATIENT_ID: ${PATIENT_ID:-}
+      SIM_REPEAT: ${SIM_REPEAT:-false}
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      observation-processor:
+        condition: service_started
+    networks:
+      - cgm-network
+
+  ipfs-node:
+    profiles: ["ipfs", "storage"]
+    build:
+      context: ./ipfs-node/ipfs
+    restart: unless-stopped
+    env_file:
+      - ./ipfs-node/.env
+    environment:
+      IPFS_SWARM_KEY_FILE: /swarm.key
+    ports:
+      - "127.0.0.1:5001:5001"
+      - "127.0.0.1:8084:8080"
+    volumes:
+      - ./ipfs-node/ipfs/swarm.key:/swarm.key:ro
+      - ipfs_data:/data/ipfs
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5001/api/v0/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ipfs-network
+
+networks:
+  cgm-network:
+    driver: bridge
+  ipfs-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  ipfs_data:
+    name: ipfs-node_ipfs_data
