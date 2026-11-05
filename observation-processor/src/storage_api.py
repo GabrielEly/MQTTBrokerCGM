@@ -6,10 +6,11 @@ from typing import Any, Literal
 
 import psycopg
 import requests
-from fastapi import FastAPI, HTTPException
+from cryptography.exceptions import InvalidTag
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from storage import ensure_schema, store_observation
+from storage import ensure_schema, get_patient_observations, store_observation
 
 
 logging.basicConfig(
@@ -30,6 +31,12 @@ public_key_path = Path(
     os.getenv(
         "ENCRYPTION_PUBLIC_KEY_PATH",
         "/run/secrets/observations-public.pem",
+    )
+)
+private_key_path = Path(
+    os.getenv(
+        "ENCRYPTION_PRIVATE_KEY_PATH",
+        "/run/secrets/observations-private.pem",
     )
 )
 
@@ -109,3 +116,46 @@ def receive_observation(observation: ObservationRequest) -> StoredObservation:
         ) from error
 
     return StoredObservation(observation_id=observation.id, cid=cid)
+
+
+@app.get("/observations")
+def read_patient_observations(
+    patient_id: str = Query(min_length=1),
+) -> list[dict[str, Any]]:
+    try:
+        return get_patient_observations(
+            patient_id,
+            database_connection,
+            ipfs_api_url,
+            private_key_path,
+        )
+    except requests.RequestException as error:
+        logger.error(
+            "IPFS request failed while retrieving observations for patient=%s: %s",
+            patient_id,
+            error,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="IPFS retrieval failed",
+        ) from error
+    except psycopg.Error as error:
+        logger.error(
+            "PostgreSQL operation failed while retrieving observations for patient=%s: %s",
+            patient_id,
+            error,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Reference database unavailable",
+        ) from error
+    except (OSError, ValueError, KeyError, TypeError, InvalidTag) as error:
+        logger.error(
+            "Could not decrypt observations for patient=%s: %s",
+            patient_id,
+            error,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Stored observation could not be decrypted",
+        ) from error

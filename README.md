@@ -54,6 +54,7 @@ As configurações abaixo são disponibilizadas pelo Compose. Pode-se defini-las
 | `PATIENT_ID` | vazio | Filtra um paciente específico |
 | `IPFS_API_URL` | `http://ipfs-node:5001` | API do nó IPFS na rede Docker |
 | `STORAGE_API_PORT` | `8000` | Porta local da API de armazenamento |
+| `ENCRYPTION_PRIVATE_KEY_PATH` | `/run/secrets/observations-private.pem` | Caminho interno da chave privada usada para descriptografar recursos |
 | `POSTGRES_DB` | `observations` | Banco que guarda as referências |
 | `POSTGRES_USER` | `observations` | Usuário do PostgreSQL |
 | `POSTGRES_PASSWORD` | obrigatório | Senha definida no `.env` da raiz |
@@ -90,6 +91,8 @@ docker compose run --rm encryption-keygen
 ```
 
 Para armazenar uma Observation, inicie o perfil `storage` ou o projeto completo e envie-a explicitamente ao endpoint `POST http://localhost:8000/observations`; de outro contêiner na rede principal, use `http://observation-storage:8000/observations`. A API do host está vinculada somente a `127.0.0.1`. Cada chamada bem-sucedida gera um arquivo cifrado individual no IPFS. A tabela `observation_references` mantém `observation_id`, `patient_id`, `cid`, `observed_at` e `created_at`; o identificador de paciente é extraído da referência FHIR (`urn:uuid:` ou `Patient/`). O PostgreSQL persiste em um volume Docker e sua porta fica disponível somente em `127.0.0.1:5432`.
+
+Para recuperar os recursos de um paciente, consulte `GET http://localhost:8000/observations?patient_id=<identificador>`. A API busca os CIDs associados ao paciente no PostgreSQL, baixa cada recurso do IPFS, descriptografa-o com `private.pem` e retorna uma lista JSON de Observations. Se não houver recursos associados, retorna `[]`. Erros do IPFS retornam HTTP 502 e indisponibilidade do banco retorna HTTP 503. A chave privada é montada somente para leitura no serviço da API; mantenha-a protegida e não a compartilhe.
 
 Exemplo de envio manual de um recurso existente no JSONL:
 

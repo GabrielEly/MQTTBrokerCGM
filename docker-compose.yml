@@ -53,6 +53,7 @@ services:
     environment:
       IPFS_API_URL: ${IPFS_API_URL:-http://ipfs-node:5001}
       ENCRYPTION_PUBLIC_KEY_PATH: /run/secrets/observations-public.pem
+      ENCRYPTION_PRIVATE_KEY_PATH: /run/secrets/observations-private.pem
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-observations}
@@ -62,6 +63,7 @@ services:
       - "127.0.0.1:${STORAGE_API_PORT:-8000}:8000"
     volumes:
       - ./secrets/encryption/public.pem:/run/secrets/observations-public.pem:ro
+      - ./secrets/encryption/private.pem:/run/secrets/observations-private.pem:ro
     depends_on:
       postgres:
         condition: service_healthy

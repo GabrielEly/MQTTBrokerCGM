@@ -69,6 +69,8 @@ def decrypt_observation(
         raise ValueError("The observations private key must be an RSA key")
 
     envelope = json.loads(encrypted_payload)
+    if not isinstance(envelope, dict):
+        raise ValueError("Invalid encrypted observation envelope")
     if (
         envelope.get("version") != _ENVELOPE_VERSION
         or envelope.get("algorithm") != "RSA-OAEP-256+A256GCM"
@@ -165,3 +167,33 @@ def store_observation(
             ),
         )
     return cid
+
+
+def get_patient_observations(
+    patient_id: str,
+    database_connection: dict[str, Any],
+    ipfs_api_url: str,
+    private_key_path: Path,
+) -> list[dict[str, Any]]:
+    with psycopg.connect(**database_connection) as connection:
+        references = connection.execute(
+            """
+            SELECT cid
+            FROM observation_references
+            WHERE patient_id = %s
+            ORDER BY observed_at, observation_id
+            """,
+            (patient_id,),
+        ).fetchall()
+
+    observations = []
+    for (cid,) in references:
+        response = requests.post(
+            f"{ipfs_api_url.rstrip('/')}/api/v0/cat",
+            params={"arg": cid},
+            timeout=(5, 30),
+        )
+        response.raise_for_status()
+        observations.append(decrypt_observation(response.content, private_key_path))
+
+    return observations
